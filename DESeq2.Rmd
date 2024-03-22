@@ -18,7 +18,7 @@ This analysis aims to investigate differential gene expression using the DESeq2 
 
 ## Loading libraries required
 
-```{r cars}
+```{r}
 # load libraries
 library(DESeq2)
 library(tidyverse)
