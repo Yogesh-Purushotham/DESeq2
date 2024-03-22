@@ -1,0 +1,528 @@
+---
+title: "Predictive Modeling for Chronic Kidney Disease (CKD): Development and Performance Analysis"
+author: "Yogesh Purushotham"
+date: "Fall 2023"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 4
+subtitle: "DA5030"
+---
+
+### Objective: 
+The primary goal of my analysis is to predict whether an individual has chronic kidney disease, making the target variable 'classification', which categorizes entries into 'ckd' or not 'ckd'. This makes it a classification task, as the target variable is categorical.
+
+### Significance: 
+Early detection and intervention of chronic kidney disease (CKD) can significantly improve patient outcomes and give more time for early diagnosis. 
+
+### Algorithms and approach: 
+In this project, I plan to employ logistic regression, decision trees, and SVM models followed by Random forest model as an ensemble for decision tree and also an ensemble model using the predictions of logistic regression, decision trees, and SVM models. For feature engineering, given the mix of numeric and categorical data, I anticipate encoding categorical variables and normalizing numerical features.
+
+### Model evaluation: 
+To evaluate the fit of these algorithms, I will use metrics such as accuracy, precision, recall, and F1 score. These metrics are particularly relevant for classification tasks and will help in assessing the performance of each model.
+
+While similar analyses have been conducted on datasets related to kidney disease, my approach will focus on a comprehensive exploration of this specific dataset, potentially uncovering new insights. I aim to integrate advanced machine learning techniques and a thorough exploratory analysis to understand the complexities of kidney disease prediction. Here I employ Logistic regression model which is a standard choice for binary classification tasks and can provide a baseline for performance and Decision tree mdoel which is more complex and can handle non-linear relationships better, followed by SVM or a support vector machine. They are particularly effective for classification tasks and can also provide insights into feature importance. My project will differ in its detailed focus on the in-depth evaluation of multiple machine learning models, aimed at deriving the most accurate predictions possible.
+
+### Data Acquisition
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(readr)
+library(caret)
+library(e1071)
+library(rpart)
+library(mice)
+```
+
+### Overview of data:
+For my signature term project in machine learning and data mining, I have selected a dataset focused on kidney disease, specifically chronic kidney disease (CKD), collected from UCI machine learning repository https://archive.ics.uci.edu/ml/datasets/chronic_kidney_disease. (UCI Machine Learning Repository, n.d.)
+This dataset is used to predict the chronic kidney disease which is collected from hospitals for 2 months of period and Comprises 400 rows and 26 columns (variables/features).  These attributes include age, blood pressure, specific gravity, albumin level, sugar level, red blood cells count, and more, offering a comprehensive view of factors potentially influencing kidney health.
+
+```{r echo=FALSE, warning=FALSE}
+
+#Url link for the dataset
+url <- "https://drive.google.com/uc?id=1z7Ag6GGSiaOOhfUWaF86Ty1Pi2Q7moi-&export=download"
+kidney_disease_data <- read.csv(url, na = c("", "NA", "?", "-"))
+
+# Display the first few rows of the modified dataset
+str(kidney_disease_data)
+```
+
+
+The initial exploration of the dataset reveals the following:
+
+- The dataset contains 400 entries and 26 columns.
+- There are both numerical (e.g., age, blood pressure) and categorical variables (e.g., red blood cell count, pus cell clumps).
+- The id column is present, which I will drop for modeling purposes.
+- The classification column is the target variable, with classes like 'ckd' (chronic kidney disease) and not 'ckd'.
+-  Several columns have missing values, evident from the non-null count being less than 400 in many columns.
+- Change 'ckd\t' to 'ckd' in the classification column to ensure consistency in the target variable.
+
+
+```{r warning=FALSE, include=FALSE}
+# Dropping the 'id' column
+kidney_disease_data <- kidney_disease_data[ , !(names(kidney_disease_data) %in% c('id'))]
+
+# Modify the 'classification' feature
+kidney_disease_data$classification <- gsub("ckd\t", "ckd", kidney_disease_data$classification)
+
+# Display the first few rows of the modified dataset
+head(kidney_disease_data)
+
+```
+
+### Data Exploration and data distribution:
+
+Exploratory Data Plots: The histograms provide insights into the distributions of various continuous variables such as age, blood pressure (bp), specific gravity (sg), albumin (al), and sugar (su).
+
+Detection of Outliers: The boxplots and scatter plots for numerical columns help in identifying potential outliers. Outliers are the data points that significantly deviate from the rest of the data and can impact the analysis.
+
+```{r echo=FALSE, fig.height=3, fig.width=2.5, message=FALSE, warning=FALSE, paged.print=TRUE}
+
+# Converting 'pcv', 'wc', and 'rc' to numeric
+kidney_disease_data$pcv <- as.numeric(gsub("[^0-9.]", "", kidney_disease_data$pcv))
+kidney_disease_data$wc <- as.numeric(gsub("[^0-9.]", "", kidney_disease_data$wc))
+kidney_disease_data$rc <- as.numeric(gsub("[^0-9.]", "", kidney_disease_data$rc))
+
+# To get names of numerical columns
+numerical_cols <- names(kidney_disease_data %>% select_if(is.numeric))  
+
+# Explicitly converting known categorical columns to factors
+categorical_columns <- c('rbc', 'pcc', 'pc', 'ba', 'htn', 'dm', 'cad', 'appet', 'pe', 'ane', 'classification')
+kidney_disease_data[categorical_columns] <- lapply(kidney_disease_data[categorical_columns], as.factor)
+
+# Updating the list of categorical columns
+categorical_cols <- names(kidney_disease_data %>% select_if(is.factor))
+
+# Histograms for numerical features
+for (column in numerical_cols) {
+  print(
+    ggplot(kidney_disease_data, aes_string(x = column)) +
+    geom_histogram(bins = 30, fill = "blue", alpha = 0.7) +
+    ggtitle(paste('Distribution of', column)) +
+    theme_minimal()
+  )
+}
+
+# Bar plot for categorical features
+for (column in categorical_cols) {
+  print(
+    ggplot(kidney_disease_data, aes_string(x = column)) +
+    geom_bar(fill = "orange", alpha = 0.7) +
+    ggtitle(paste('Distribution of', column)) +
+    theme_minimal()
+  )
+}
+
+# Box plots for numerical features for Outlier Detection
+for (column in numerical_cols) {
+  print(
+    ggplot(kidney_disease_data, aes_string(y = column)) +
+    geom_boxplot(fill = "lightblue", color = "grey") +
+    ggtitle(paste('Box Plot of', column)) +
+    theme_minimal()
+  )
+}
+```
+
+```{r echo=FALSE, warning=FALSE}
+# Scatter Plot for numerical features for Outlier Detection
+pairs(kidney_disease_data[numerical_cols])
+
+```
+
+### Exploratory Data Analysis Results and Evaluation of Data Distribution:
+
+Numerical Data Distribution:
+
+Blood Pressure (bp), Blood Urea (bu), Serum Creatinine (sc): These features exhibit a right-skewed distribution, indicating a concentration of lower values and a long tail towards higher values.
+
+Blood Glucose Random (bgr), Sodium (sod), Potassium (pot): Similar to bp, bu, and sc, these features also show a right-skewed distribution.
+
+Hemoglobin (hemo), Packed Cell Volume (pcv), Red Blood Cell Count (rc): These features appear more normally distributed but still show some skewness.
+
+Age: The distribution of age is relatively more uniform but slightly right-skewed.
+
+Overall, many numerical features exhibit skewness, which may require normalization or transformation.
+Categorical Data Distribution:
+
+Red Blood Cells (rbc), Pus Cell (pc), Pus Cell Clumps (pcc), Bacteria (ba): These features show a significant imbalance in their categories.
+
+Hypertension (htn), Diabetes Mellitus (dm), Coronary Artery Disease (cad), Appetite (appet), Pedal Edema (pe), Anemia (ane) also exhibit imbalance, with one category being more prevalent than the other.
+
+Here are the observations from the box plots for features in the dataset:
+
+- Blood Pressure (bp): Some values are significantly higher than the majority, indicating potential outliers.
+- Blood Glucose Random (bgr): This feature also shows a number of outliers on the higher side.
+- Blood Urea (bu): There are outliers present, especially higher values.
+- Serum Creatinine (sc): This feature has several high-value outliers.
+- Sodium (sod): There are outliers on both the lower and higher ends.
+- Potassium (pot): Numerous high-value outliers are present.
+- Hemoglobin (hemo): A few low-value outliers can be seen.
+- Packed Cell Volume (pcv), White Blood Cell Count (wc), and Red Blood Cell Count (rc): These features also display outliers, mostly on the higher side for wc and on both sides for pcv and rc.
+
+### Correlation/Collinearity Analysis using heatmap 
+
+```{r echo=FALSE, warning=FALSE}
+
+# Calculate the correlation matrix
+correlation_matrix <- cor(kidney_disease_data[numerical_cols], use="complete.obs")
+
+# Create a heatmap using corrplot
+corrplot(correlation_matrix, method = "color", type = "upper", 
+         tl.col = "black", tl.srt = 45, 
+         diag = FALSE,  # Do not display the diagonal (self-correlation)
+         cl.lim = c(-1, 1))  # Limit color scale to -1 to 1 for correlation
+```
+
+The heatmap above shows the correlation matrix for the numerical features in the dataset:
+
+Strong Correlations: There are pairs of features that exhibit strong positive or negative correlations. For example, features like 'hemo' (hemoglobin) and 'pcv' (packed cell volume) show a strong positive correlation.
+
+Weak Correlations: Some features display weak correlations with others, indicating less direct linear relationships.
+
+### Data Cleaning & Shaping:
+
+### identification of missing values
+
+I observed that there are quite a few missing values in the dataset so to count missing values for each column:
+
+```{r echo=FALSE, warning=FALSE}
+# Checking for missing values in the dataset
+original_missing_values <- sapply(kidney_disease_data, function(x) sum(is.na(x)))
+
+# Displaying missing values in the original dataset
+original_missing_values
+
+```
+
+### Imputing missing values 
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# MICE imputation
+imputed_data <- mice(kidney_disease_data, method = 'pmm', m = 5, maxit = 5)
+
+# Creating the completed dataset
+cleaned_data <- complete(imputed_data, 1)
+
+# Checking for missing values in the completed data
+sum(is.na(cleaned_data))
+
+```
+
+To Impute the missing values I used the MICE library available for R. Now we can recheck to see that there are no missing values:
+
+```{r echo=FALSE, warning=FALSE}
+
+# Checking for missing values in the dataset
+kdata <- sapply(cleaned_data, function(x) sum(is.na(x)))
+
+# Displaying missing values in the dataset
+kdata
+
+```
+
+Here we can see that there are no missing data. Hence proceeding with data normalization:
+
+- For columns with a small proportion of missing data (say, less than 10%), simple imputation methods like using the mean (for numerical features) or mode (for categorical features) can be effective. This is because the risk of introducing significant bias is relatively low when the amount of missing data is minimal.
+
+- MICE for High missingness and Complexity: For columns with a higher degree of missingness (over 20%), especially those like rbc, rc, wc, pot, sod, which also potentially have complex relationships with other variables, MICE would be more appropriate. MICE can better account for the underlying patterns and relationships in the data, which is crucial when dealing with significant missingness.
+
+Dataset Characteristics: Given that my dataset is related to kidney disease, it's likely that many features are interrelated, and their relationships might be important for understanding the disease and making predictions. This complexity makes a strong case for using MICE for columns with more substantial missingness or complex interactions.
+
+### Normalization
+
+```{r echo=FALSE, warning=FALSE}
+library(caret)
+preprocess_params <- preProcess(cleaned_data[numerical_cols], method = c("center", "scale"))
+
+# Standardizing the numerical columns
+standardized_data <- predict(preprocess_params, cleaned_data[numerical_cols])
+
+# Combining the standardized numerical data with the original categorical data
+non_numerical_cols <- setdiff(names(cleaned_data), numerical_cols)
+kidney_disease_dn <- cbind(cleaned_data[non_numerical_cols], standardized_data)
+```
+
+### PCA
+
+```{r echo=FALSE, warning=FALSE}
+# PCA for Dimensionality Reduction (only numerical columns)
+numerical_data_for_pca <- kidney_disease_dn[, sapply(kidney_disease_dn, is.numeric)]
+
+# PCA for Dimensionality Reduction
+pca_result <- prcomp(numerical_data_for_pca, center = TRUE, scale. = TRUE)
+summary(pca_result)
+```
+
+
+
+### Data Partitioning and Preprocessing:
+### Split ratio of 80% Training and 20% Testing:
+
+```{r echo=FALSE, warning=FALSE}
+
+# Data Splitting
+set.seed(123)
+split1 <- createDataPartition(kidney_disease_dn$classification, p = 0.8, list = FALSE)
+train_data <- kidney_disease_dn[split1, ]
+test_data <- kidney_disease_dn[-split1, ]
+
+```
+
+### Training the Models with split ratio of 80% Training and 20% Testing :
+
+
+```{r echo=FALSE, warning=FALSE}
+
+# Logistic Regression Model
+logit_model <- train(classification ~ ., data = train_data, method = "glm", family = "binomial", trControl = trainControl(method = "cv", number = 10))
+logit_pred <- predict(logit_model, newdata = test_data)
+logit_results <- confusionMatrix(logit_pred, test_data$classification)
+
+# Saving the accuracy, specificity and sensitivity of the model 
+logit_accuracy <- logit_results$overall['Accuracy']
+logit_specificity <- logit_results$byClass['Specificity']
+logit_sensitivity <- logit_results$byClass['Sensitivity']
+
+# Decision Tree
+tree_model <- rpart(classification ~ ., data = train_data, method = "class")
+tree_predictions <- predict(tree_model, newdata = test_data, type = "class")
+tree_pred_factor <- as.factor(levels(tree_predictions)[max.col(tree_predictions, ties.method = "first")])
+tree_pred_factor <- factor(tree_predictions, levels = levels(test_data$classification))
+tree_results <- confusionMatrix(tree_pred_factor, test_data$classification)
+
+# Saving the accuracy, specificity and sensitivity of the model
+tree_accuracy <- tree_results$overall['Accuracy']
+tree_specificity <- tree_results$byClass['Specificity']
+tree_sensitivity <- tree_results$byClass['Sensitivity']
+
+# SVM
+svm_model <- svm(classification ~ ., data = train_data)
+svm_predictions <- predict(svm_model, newdata = test_data)
+svm_results <- confusionMatrix(svm_predictions, test_data$classification)
+
+# Saving the accuracy, specificity and sensitivity of the model
+svm_accuracy <- svm_results$overall['Accuracy']
+svm_specificity <- svm_results$byClass['Specificity']
+svm_sensitivity <- svm_results$byClass['Sensitivity']
+
+```
+
+The performance of the models is summarized below:
+
+- Logistic Regression: Accuracy - `r logit_accuracy`, Specificity - `r logit_specificity`, Sensitivity - `r logit_sensitivity`.
+- Decision Tree: Accuracy - `r tree_accuracy`, Specificity - `r tree_specificity`, Sensitivity - `r tree_sensitivity`.
+- SVM: Accuracy - `r svm_accuracy`, Specificity - `r svm_specificity`, Sensitivity - `r svm_sensitivity`.
+
+
+### Training the Models with split ratio of 70% Training and 30% Testing :
+
+```{r echo=FALSE, warning=FALSE}
+
+# Data Splitting
+set.seed(123)
+split2 <- createDataPartition(kidney_disease_dn$classification, p = 0.7, list = FALSE)
+train_data <- kidney_disease_dn[split2, ]
+test_data <- kidney_disease_dn[-split2, ]
+
+# Logistic Regression Model
+logit_model <- train(classification ~ ., data = train_data, method = "glm", family = "binomial", trControl = trainControl(method = "cv", number = 10))
+logit_pred <- predict(logit_model, newdata = test_data)
+logit_results <- confusionMatrix(logit_pred, test_data$classification)
+
+# Saving the accuracy, specificity and sensitivity of the model 
+logit_accuracy <- logit_results$overall['Accuracy']
+logit_specificity <- logit_results$byClass['Specificity']
+logit_sensitivity <- logit_results$byClass['Sensitivity']
+
+# Decision Tree
+tree_model <- rpart(classification ~ ., data = train_data, method = "class")
+tree_predictions <- predict(tree_model, newdata = test_data, type = "class")
+tree_pred_factor <- as.factor(levels(tree_predictions)[max.col(tree_predictions, ties.method = "first")])
+tree_pred_factor <- factor(tree_predictions, levels = levels(test_data$classification))
+tree_results <- confusionMatrix(tree_pred_factor, test_data$classification)
+
+# Saving the accuracy, specificity and sensitivity of the model
+tree_accuracy <- tree_results$overall['Accuracy']
+tree_specificity <- tree_results$byClass['Specificity']
+tree_sensitivity <- tree_results$byClass['Sensitivity']
+
+# SVM
+svm_model <- svm(classification ~ ., data = train_data)
+svm_predictions <- predict(svm_model, newdata = test_data)
+svm_results <- confusionMatrix(svm_predictions, test_data$classification)
+
+# Saving the accuracy, specificity and sensitivity of the model
+svm_accuracy <- svm_results$overall['Accuracy']
+svm_specificity <- svm_results$byClass['Specificity']
+svm_sensitivity <- svm_results$byClass['Sensitivity']
+
+```
+
+The performance of the models is summarized below:
+
+- Logistic Regression: Accuracy - `r logit_accuracy`, Specificity - `r logit_specificity`, Sensitivity - `r logit_sensitivity`.
+- Decision Tree: Accuracy - `r tree_accuracy`, Specificity - `r tree_specificity`, Sensitivity - `r tree_sensitivity`.
+- SVM: Accuracy - `r svm_accuracy`, Specificity - `r svm_specificity`, Sensitivity - `r svm_sensitivity`.
+
+### Training the Models with split ratio of 75% Training and 25% Testing :
+
+```{r echo=FALSE, warning=FALSE}
+
+# Data Splitting
+set.seed(123)
+split3 <- createDataPartition(kidney_disease_dn$classification, p = 0.75, list = FALSE)
+train_data <- kidney_disease_dn[split3, ]
+test_data <- kidney_disease_dn[-split3, ]
+
+# Logistic Regression Model
+logit_model <- train(classification ~ ., data = train_data, method = "glm", family = "binomial", trControl = trainControl(method = "cv", number = 10))
+logit_pred <- predict(logit_model, newdata = test_data)
+logit_results <- confusionMatrix(logit_pred, test_data$classification)
+
+# Saving the accuracy, specificity and sensitivity of the model 
+logit_accuracy <- logit_results$overall['Accuracy']
+logit_specificity <- logit_results$byClass['Specificity']
+logit_sensitivity <- logit_results$byClass['Sensitivity']
+
+# Decision Tree
+tree_model <- rpart(classification ~ ., data = train_data, method = "class")
+tree_predictions <- predict(tree_model, newdata = test_data, type = "class")
+tree_pred_factor <- as.factor(levels(tree_predictions)[max.col(tree_predictions, ties.method = "first")])
+tree_pred_factor <- factor(tree_predictions, levels = levels(test_data$classification))
+tree_results <- confusionMatrix(tree_pred_factor, test_data$classification)
+
+# Saving the accuracy, specificity and sensitivity of the model
+tree_accuracy <- tree_results$overall['Accuracy']
+tree_specificity <- tree_results$byClass['Specificity']
+tree_sensitivity <- tree_results$byClass['Sensitivity']
+
+# SVM
+svm_model <- svm(classification ~ ., data = train_data)
+svm_predictions <- predict(svm_model, newdata = test_data)
+svm_results <- confusionMatrix(svm_predictions, test_data$classification)
+
+# Saving the accuracy, specificity and sensitivity of the model
+svm_accuracy <- svm_results$overall['Accuracy']
+svm_specificity <- svm_results$byClass['Specificity']
+svm_sensitivity <- svm_results$byClass['Sensitivity']
+
+```
+
+In the 75-25 split evaluation of kidney disease data, the models of Logistic Regression, Decision Tree, and SVM demonstrated high efficacy. The Logistic Regression model achieved an accuracy of `r logit_accuracy`, with sensitivity at `r logit_sensitivity` and specificity at `r logit_specificity`. This indicates its robust capability in correctly classifying both 'ckd' and 'notckd' cases. The model's positive predictive value (PPV) and negative predictive value (NPV) were exceptionally high, reinforcing its reliability in making predictions. The Decision Tree model showed an accuracy of `r tree_accuracy`, a sensitivity of `r tree_sensitivity`, and a specificity of `r tree_specificity`. These figures represent a strong performance, particularly in correctly identifying 'ckd' cases (since high sensitivity). The SVM model achieved a perfect score across all metrics, with an accuracy, sensitivity, specificity, PPV, and NPV all at 100%. This indicates its really good ability to classify the dataset without any errors.
+
+These results suggest that all three models are highly effective for this particular dataset. Here the SVM model seems to be the best model with the best accuracy. However, the perfect scores in SVM, as in the previous split ratios, raise a potential concern for overfitting. This underlines the importance of further validation and testing, particularly for the SVM model, so we have to ensure its generalizability and robustness in different datasets and conditions.
+
+Given these observations, the 75-25 split appears to be marginally better for Logistic Regression and SVM, while the 80-20 split seems slightly more favorable for the Decision Tree. However, the differences are minimal, suggesting that all split ratios are generally effective for this dataset. Since Random forest is essentially an ensemble of decision tree models I will go ahead with a 80-20 split for this model.
+
+
+### Random Forest as an ensemble model wiht 80:20 split dataset:
+
+```{r echo=FALSE, warning=FALSE}
+# Data Splitting
+set.seed(123)
+split1 <- createDataPartition(kidney_disease_dn$classification, p = 0.8, list = FALSE)
+train_data <- kidney_disease_dn[split1, ]
+test_data <- kidney_disease_dn[-split1, ]
+
+# Set a random seed for reproducibility
+set.seed(123)
+
+# Hyperparameter Tuning Grid
+tuneGrid <- expand.grid(mtry = c(1:5))
+
+# Set up 10-fold cross-validation method
+train_control <- trainControl(method = "cv", number = 10) 
+
+# Train the Random Forest model with hyperparameter tuning
+rf_model <- train(classification ~ ., data = train_data, method = "rf", tuneGrid = tuneGrid, trControl = train_control)
+print(rf_model)
+
+```
+
+The Random Forest model evaluation for the kidney disease dataset with 320 samples, 24 predictors, and two classes ('ckd' and 'notckd') shows really good performance. This evaluation involves a 10-fold cross-validation process without any data pre-processing.
+The use of 10-fold cross-validation, is a robust method for assessing model performance and ensuring that the evaluation is not biased towards a specific subset of the data.
+
+Key observations from the resampling results across different tuning parameters are as follows:
+
+Performance Metrics: The model achieved near-perfect to perfect accuracy across different 'mtry' values:
+With different mtry values, the accuracy was as displayed in the output with their corresponding Kappa statistic until the model reached a perfect accuracy of 100% and a Kappa statistic of 1.0000.
+
+Model Selection: The model with the highest accuracy was selected as the optimal model. Despite several 'mtry' values yielding a perfect accuracy of 100%, the final model chosen as per the selection criteria for the optimal model using the largest accuracy value.
+
+Interpretation: The high accuracy and Kappa values indicate that the Random Forest model is extremely effective in distinguishing between the two classes of the dataset. The suggested Kappa statistic near to the chosen mtry value suggests that the model's predictions are not only accurate but also significantly better than chance-level predictions.
+
+### Creating an ensemble model function :
+
+```{r echo=FALSE, warning=FALSE}
+
+set.seed(123)
+
+# Logistic Regression
+logit_model <- train(classification ~ ., data = train_data, method = "glm", family = "binomial", trControl = trainControl(method = "cv", number = 10))
+
+# Decision Tree
+tree_model <- rpart(classification ~ ., data = train_data, method = "class")
+
+# SVM
+svm_model <- svm(classification ~ ., data = train_data)
+
+# Ensemble Predictions Function:
+ensemble_predictions <- function(test_data) {
+    # Predictions from each model
+    predictions_logit <- predict(logit_model, newdata = test_data)
+    predictions_tree <- predict(tree_model, newdata = test_data, type = "class")
+    predictions_svm <- predict(svm_model, newdata = test_data)
+    
+    # Combine predictions into a data frame
+    combined_predictions <- data.frame(predictions_logit, predictions_tree, predictions_svm)
+    
+    # Majority vote for final prediction
+    final_predictions <- apply(combined_predictions, 1, function(x) {
+        names(sort(table(x), decreasing = TRUE))[1]
+    })
+    
+    return(final_predictions)
+}
+
+# Generate ensemble predictions
+ensemble_pred <- ensemble_predictions(test_data)
+
+# Evaluating the ensemble model
+ensemble_results <- confusionMatrix(as.factor(ensemble_pred), test_data$classification)
+
+# Printing the results
+print("Ensemble Model Results:")
+print(ensemble_results)
+
+```
+
+The approach here is to use an ensemble model for classification task is to use a voting system where the final class is determined by the majority vote from the individual models. 
+
+Here the function Trains the three models (Logistic Regression, Decision Tree, and SVM) on the training data and defines a function ensemble_predictions that:
+
+- Takes test_data as input.
+- Generates predictions from each model.
+- Combines these predictions and decides the final prediction based on majority voting.
+- Evaluates the performance of the ensemble model using a confusion matrix.
+
+Interpretation of the ensemble model prediction :
+
+- Accuracy: The model achieved an accuracy of 100% (1.0). This means that every prediction made by the model, whether for the 'ckd'    or 'notckd' class, was correct.
+- 95% Confidence Interval: The 95% confidence interval for accuracy is between 95.49% and 100%. This high interval indicates strong    confidence in the model's accuracy.
+- No Information Rate (NIR): The NIR is 62.5%, and the model's accuracy is significantly better than this rate (p-value < 2.2e-16),    suggesting that the model's predictions are highly reliable and not due to chance.
+- Kappa: The Kappa statistic is 1, indicating perfect agreement between the model's predictions and the actual values and signifies    that the model's performance is not due to random chance.
+- Sensitivity and Specificity: Both are at 100% (1.000). Sensitivity (or True Positive Rate) measures the proportion of actual         positives correctly identified, while Specificity (or True Negative Rate) measures the proportion of actual negatives correctly      identified.
+
+Since this model uses majority voting and is a combination of individual base models, this ensemble model has better metrics for the classification task at hand compared to any of the models developed above (although most of the models did perform exeptionally well). The ensemble model combining Logistic Regression, Decision Tree, and SVM shows superior performance with an accuracy of 100%. This suggests that the ensemble approach is effective in this case, potentially offering better predictive performance than individual models.
+
+
+### Conclusion:
+
+After evaluation of each model performance over various train and test split ratios, I decided the split ratio of 80:20 for training the Random Forest model (which is an ensemble of various decision tree models) and also the ensemble model using logistic regression model, decision tree model and SVM models. Here we finally developed an ensemble model which can now classify and predict whether an individual has chronic kidney disease or not, ensuring early detection and intervention of chronic kidney disease (CKD) which can significantly improve patient outcomes.
+
+### Reference:
+Rubini,L., Soundarapandian,P., and Eswaran,P.. (2015). Chronic_Kidney_Disease. UCI Machine Learning Repository. https://doi.org/10.24432/C5G020.
