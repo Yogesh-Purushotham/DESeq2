@@ -28,7 +28,7 @@ library(airway)
 
 ## Script to get data from airway package
 
-```{r cars}
+```{r}
 
 data(airway)
 airway
@@ -47,7 +47,7 @@ write.table(countsData, file = "counts_data.csv", sep = ',', col.names = T, row.
 
 ## Preparing count data 
 
-```{r cars}
+```{r}
 # reading in counts data
 counts_data <- read.csv('counts_data.csv')
 head(counts_data)
@@ -65,7 +65,7 @@ all(colnames(counts_data) == rownames(colData))
 
 ## Constructing a DESeqDataSet object:
 
-```{r cars}
+```{r}
 
 dds <- DESeqDataSetFromMatrix(countData = counts_data,
                        colData = colData,
@@ -86,7 +86,7 @@ dds$dexamethasone <- relevel(dds$dexamethasone, ref = "untreated")
 
 ## Running DESeq 
 
-```{r cars}
+```{r}
 
 dds <- DESeq(dds)
 res <- results(dds)
@@ -97,7 +97,7 @@ res
 
 ## Exploring Results
 
-```{r cars}
+```{r}
 summary(res)
 
 res0.01 <- results(dds, alpha = 0.01)
